@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ config.APP_NAME }}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        :root { --bg-color: #f0f2f5; --text-color: #333; --card-bg: #fff; --nav-bg: #263238; }
+        @media (prefers-color-scheme: dark) {
+            :root { --bg-color: #121212; --text-color: #e0e0e0; --card-bg: #1e1e1e; --nav-bg: #111; }
+            input[type=text], input[type=password] { color: white !important; }
+            table.striped > tbody > tr:nth-child(odd) { background-color: rgba(255,255,255,0.05); }
+            .modal { background-color: var(--card-bg); color: var(--text-color); }
+        }
+        body { background-color: var(--bg-color); color: var(--text-color); display: flex; min-height: 100vh; flex-direction: column; }
+        .card, .sidenav { background-color: var(--card-bg); color: var(--text-color); }
+        .sidenav li a { color: var(--text-color); cursor: pointer; }
+        main, header, footer { padding-left: 300px; }
+        @media only screen and (max-width : 992px) { main, header, footer { padding-left: 0; } }
+        .sidenav-header { background-color: var(--nav-bg); color: white; padding: 20px; text-align: center; }
+        .company-logo { max-width: 150px; max-height: 60px; margin-bottom: 10px; }
+        .action-btn { margin-right: 10px; cursor: pointer; }
+        .copy-icon { font-size: 14px; cursor: pointer; color: #2196F3; margin-left: 5px; vertical-align: middle; }
+        .fab-container { position: fixed; bottom: 30px; right: 30px; }
+        select { display: block; background: transparent; color: var(--text-color); border: 1px solid var(--text-color); padding: 5px; }
+        .search-wrapper { display: flex; align-items: center; margin-bottom: 20px; }
+        .search-wrapper input { flex: 1; margin-bottom: 0 !important; }
+        .search-wrapper button { margin-left: 10px; }
+        .header-actions { display: flex; justify-content: space-between; align-items: center; }
+        .stat-card { padding: 20px; border-radius: 8px; color: white; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <ul id="slide-out" class="sidenav sidenav-fixed">
+        <div class="sidenav-header">
+            <img src="/static/uploads/company_logo.png" onerror="this.style.display='none'" class="company-logo" id="sidebarLogo"><br>
+            <h5 style="margin-top:0;"><i class="material-icons left">security</i>{{ config.APP_NAME }}</h5>
+            <p>{{ user.name }}</p>
+        </div>
+        <li><a onclick="loadView('dashboard')"><i class="material-icons">dashboard</i>Dashboard</a></li>
+        <li><a onclick="loadView('users')"><i class="material-icons">people</i>Users</a></li>
+        
+        {% if config.ENABLE_GROUP_MANAGEMENT %}
+        <li><a onclick="loadView('groups')"><i class="material-icons">group</i>Groups</a></li>
+        {% endif %}
+        
+        {% if config.ENABLE_APP_MANAGEMENT %}
+        <li><a onclick="loadView('apps')"><i class="material-icons">apps</i>Enterprise Apps</a></li>
+        <li><div class="divider"></div></li>
+        <li><a onclick="loadView('recycle')"><i class="material-icons orange-text">delete_sweep</i>Recycle Bin</a></li>
+        {% else %}
+        <li><div class="divider"></div></li>
+        {% endif %}
+        
+        <li><a onclick="loadView('audit')"><i class="material-icons">policy</i>Audit Logs</a></li>
+        <li><a onclick="openSettings()"><i class="material-icons">settings</i>Portal Settings</a></li>
+        <li><a href="/logout" class="red-text"><i class="material-icons red-text">exit_to_app</i>Logout</a></li>
+    </ul>
+
+    <nav class="blue-grey darken-4 hide-on-large-only">
+        <div class="nav-wrapper"><a href="#" data-target="slide-out" class="sidenav-trigger"><i class="material-icons">menu</i></a><a href="#" class="brand-logo">{{ config.APP_NAME }}</a></div>
+    </nav>
+
+    <main>
+        <div class="container" style="margin-top: 30px; width: 95%;">
+            
+            <div id="dashboard-view" style="display:none;">
+                <div class="header-actions">
+                    <div><h4>Telemetry Overview</h4><p class="grey-text" style="margin-top:0;">Aggregated from the last 100 Entra ID Sign-In events.</p></div>
+                    <button class="btn blue" onclick="loadView('dashboard', null, true)"><i class="material-icons left">sync</i>Sync Now</button>
+                </div>
+                <div class="row">
+                    <div class="col s12 m4"><div class="stat-card blue darken-2"><i class="material-icons large">login</i><h3 id="statTotal" style="margin:0;">-</h3><p>Total Logins</p></div></div>
+                    <div class="col s12 m4"><div class="stat-card green darken-2"><i class="material-icons large">check_circle</i><h3 id="statSuccess" style="margin:0;">-</h3><p>Successful</p></div></div>
+                    <div class="col s12 m4"><div class="stat-card red darken-2"><i class="material-icons large">warning</i><h3 id="statFailed" style="margin:0;">-</h3><p>Failed Attempts</p></div></div>
+                </div>
+                <div class="card"><div class="card-content">
+                    <span class="card-title">Client Operating Systems</span>
+                    <table class="striped"><thead><tr><th>OS Name</th><th>Sign-In Count</th></tr></thead><tbody id="statOsList"></tbody></table>
+                </div></div>
+            </div>
+
+            <div id="table-view" class="card">
+                <div class="card-content">
+                    <div class="header-actions">
+                        <span class="card-title" id="view-title" style="margin-bottom:0;">Loading...</span>
+                        <div>
+                            <button class="btn blue" onclick="loadView(currentView, null, true)"><i class="material-icons left">sync</i>Sync Now</button>
+                            <a id="exportBtn" href="/api/backup/users" class="btn green" style="display:none; margin-left:10px;"><i class="material-icons left">cloud_download</i>Export Users</a>
+                        </div>
+                    </div>
+                    
+                    <div class="search-wrapper" id="search-container" style="display:none; margin-top:20px;">
+                        <i class="material-icons prefix" style="margin-right:10px;">search</i>
+                        <input id="searchInput" type="text" placeholder="Search by Name, UPN, or Object ID..." onkeypress="if(event.key === 'Enter') triggerSearch()">
+                        <button class="btn blue" onclick="triggerSearch()">Search</button>
+                        <button class="btn grey" onclick="document.getElementById('searchInput').value=''; loadView(currentView)">Clear</button>
+                    </div>
+
+                    <div class="search-wrapper" id="restore-container" style="display:none; margin-top:20px; background: rgba(255,165,0,0.1); padding: 10px; border-radius: 5px;">
+                        <i class="material-icons prefix orange-text" style="margin-right:10px;">restore</i>
+                        <input id="universalRestoreId" type="text" placeholder="Paste ANY deleted Object ID to restore...">
+                        <input id="universalRestoreTicket" type="text" placeholder="Ticket No." style="max-width: 150px; margin-left: 10px;">
+                        <button class="btn orange" onclick="executeUniversalRestore()">Restore Object</button>
+                    </div>
+
+                    <table class="striped" style="margin-top: 20px;">
+                        <thead id="dynamic-thead"></thead><tbody id="dynamic-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="fab-container" id="fab-btn"><a class="btn-floating btn-large blue" onclick="openCreateModal()"><i class="large material-icons">add</i></a></div>
+    </main>
+
+    <div id="actionModal" class="modal">
+        <div class="modal-content"><h4 id="actionTitle">Perform Action</h4><div class="input-field"><i class="material-icons prefix">confirmation_number</i><input id="ticketNumber" type="text" placeholder="e.g., INC-123456" required><label for="ticketNumber">ITSM Ticket Number (Required)</label></div><div id="dynamicFormArea"></div></div>
+        <div class="modal-footer" style="background-color: transparent;"><a href="#!" class="modal-close waves-effect btn-flat" style="color: var(--text-color);">Cancel</a><button id="confirmActionBtn" class="btn green">Execute</button></div>
+    </div>
+
+    <div id="permModal" class="modal">
+        <div class="modal-content"><h4>App API Permissions</h4><pre id="permData" style="background: #222; color: #0f0; padding: 10px; border-radius: 5px; overflow-x: auto;">Loading permissions...</pre></div>
+        <div class="modal-footer" style="background-color: transparent;"><a href="#!" class="modal-close waves-effect btn-flat" style="color: var(--text-color);">Close</a></div>
+    </div>
+
+    <div id="groupMemberModal" class="modal bottom-sheet" style="max-height: 80%;">
+        <div class="modal-content">
+            <h4 id="groupMemberTitle">Manage Group Members</h4>
+            <div class="row">
+                <div class="col s12 m8"><div class="input-field"><i class="material-icons prefix">person_add</i><input id="newMemberObjId" type="text" placeholder="e.g., 550e..."><label for="newMemberObjId">User Object ID to Add</label></div></div>
+                <div class="col s12 m4 input-field"><input id="groupTicket" type="text" placeholder="e.g., INC-123456" required><label for="groupTicket">Ticket Number</label></div>
+                <div class="col s12"><button class="btn blue" onclick="executeAddMember()">Add Member</button></div>
+            </div>
+            <div class="divider" style="margin: 20px 0;"></div><p><strong>Current Members:</strong></p><table class="striped"><tbody id="groupMemberList"></tbody></table>
+        </div>
+    </div>
+
+    <div id="diagModal" class="modal bottom-sheet">
+        <div class="modal-content"><h4>Recent Sign-In Diagnostics</h4><table class="striped"><thead><tr><th>Date</th><th>App</th><th>IP / Location</th><th>Status</th><th>Failure Reason</th></tr></thead><tbody id="diagList"></tbody></table></div>
+    </div>
+
+    <div id="mfaModal" class="modal">
+        <div class="modal-content">
+            <h4>Manage MFA Methods</h4>
+            <div class="input-field"><i class="material-icons prefix">confirmation_number</i><input id="mfaTicket" type="text" placeholder="e.g., REQ-987654" required><label for="mfaTicket">Ticket Number (For Deletion)</label></div>
+            <table class="striped"><tbody id="mfaList"></tbody></table>
+        </div>
+        <div class="modal-footer" style="background-color: transparent;"><a href="#!" class="modal-close waves-effect btn-flat" style="color: var(--text-color);">Close</a></div>
+    </div>
+
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <h4>Portal Settings</h4><div class="file-field input-field" style="margin-top: 30px;"><div class="btn blue"><span>Choose Logo</span><input type="file" id="logoUpload" accept="image/png, image/jpeg"></div><div class="file-path-wrapper"><input class="file-path validate" type="text" placeholder="Upload a PNG or JPG logo"></div></div>
+        </div>
+        <div class="modal-footer" style="background-color: transparent;"><a href="#!" class="modal-close waves-effect btn-flat" style="color: var(--text-color);">Cancel</a><button class="btn green" onclick="submitLogo()">Save Logo</button></div>
+    </div>
+
+    <div id="passwordModal" class="modal">
+        <div class="modal-content center-align">
+            <h4><i class="material-icons green-text large">check_circle</i><br>Success</h4><h5 id="createdIdentifier" class="blue-text"></h5>
+            <div class="card-panel grey lighten-3 black-text"><h4 id="createdSecret" style="letter-spacing: 2px;"></h4></div>
+            <button class="btn blue" onclick="copyToClipboard(lastGeneratedSecret.pass)"><i class="material-icons left">content_copy</i>Copy Secret</button>
+            <button class="btn green" onclick="exportCsv()"><i class="material-icons left">file_download</i>CSV</button>
+        </div>
+        <div class="modal-footer" style="background-color: transparent;"><a href="#!" class="modal-close waves-effect btn-flat" style="color: var(--text-color);">Close</a></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+    <script>
+        // Import Feature Flags from Flask
+        const appConfig = {{ config | tojson }};
+        
+        let currentView = 'dashboard'; let pendingAction = {}; let lastGeneratedSecret = {}; let tenantDomains = []; let currentGroupId = '';
+
+        document.addEventListener('DOMContentLoaded', function() {
+            M.Sidenav.init(document.querySelectorAll('.sidenav')); M.Modal.init(document.querySelectorAll('.modal'));
+            fetch('/api/domains').then(r=>r.json()).then(d => tenantDomains = d);
+            loadView('dashboard');
+        });
+
+        function copyToClipboard(text) { navigator.clipboard.writeText(text); M.toast({html: 'Copied!', classes: 'green', displayLength: 2000}); }
+
+        function safeFetch(url, tbodyId, onSuccess) {
+            fetch(url).then(async r => {
+                let data;
+                try { data = await r.json(); } catch(e) { throw new Error(`HTTP ${r.status}: Backend crashed or returned non-JSON.`); }
+                if (!r.ok) throw new Error((data.error && data.error.message) ? data.error.message : (data.error || `HTTP ${r.status}`));
+                if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+                onSuccess(data);
+            }).catch(err => {
+                console.error(err);
+                if (tbodyId === 'dashboard') {
+                    document.getElementById('statTotal').innerHTML = `<span class="red-text">Error</span>`;
+                    M.toast({html: 'Graph API Error: ' + err.message, classes: 'red rounded', displayLength: 6000});
+                } else {
+                    const tb = document.getElementById(tbodyId);
+                    if (tb) tb.innerHTML = `<tr><td colspan="6" class="red-text"><i class="material-icons left">error</i><b>Error:</b> ${err.message}</td></tr>`;
+                }
+            });
+        }
+
+        function loadView(viewType, endpoint = null, forceRefresh = false) {
+            currentView = viewType; const thead = document.getElementById('dynamic-thead'); const tbody = document.getElementById('dynamic-tbody');
+            const fab = document.getElementById('fab-btn'); const search = document.getElementById('search-container');
+            const restoreBar = document.getElementById('restore-container');
+            
+            document.getElementById('exportBtn').style.display = (viewType === 'users') ? 'inline-flex' : 'none';
+            
+            let apiRoute = viewType;
+            if (viewType === 'dashboard') apiRoute = 'telemetry';
+            if (viewType === 'apps') apiRoute = 'applications';
+            if (viewType === 'recycle') apiRoute = 'recyclebin/apps';
+
+            let url = endpoint || `/api/${apiRoute}`;
+            if (forceRefresh) { url += (url.includes('?') ? '&' : '?') + 'refresh=true'; }
+            
+            if(viewType === 'dashboard') {
+                document.getElementById('table-view').style.display = 'none'; document.getElementById('dashboard-view').style.display = 'block';
+                fab.style.display = 'none';
+                if(forceRefresh) M.toast({html: 'Syncing fresh data...', classes: 'blue rounded'});
+                
+                safeFetch(url, 'dashboard', data => {
+                    document.getElementById('statTotal').innerText = data.total; 
+                    document.getElementById('statSuccess').innerText = data.success; 
+                    document.getElementById('statFailed').innerText = data.failed;
+                    const osList = document.getElementById('statOsList'); osList.innerHTML = '';
+                    for (const [os, count] of Object.entries(data.os_counts)) { osList.innerHTML += `<tr><td>${os}</td><td>${count}</td></tr>`; }
+                });
+                return;
+            }
+            
+            document.getElementById('table-view').style.display = 'block'; document.getElementById('dashboard-view').style.display = 'none';
+            restoreBar.style.display = (viewType === 'recycle') ? 'flex' : 'none';
+            tbody.innerHTML = `<tr><td colspan="6"><div class="progress"><div class="indeterminate"></div></div></td></tr>`;
+
+            if (viewType === 'users') {
+                search.style.display = 'flex'; fab.style.display = 'block'; document.getElementById('view-title').innerText = 'User Management';
+                thead.innerHTML = '<tr><th>Name</th><th>UPN</th><th>Object ID</th><th>Status</th><th>Actions</th></tr>';
+                safeFetch(url, 'dynamic-tbody', data => {
+                    tbody.innerHTML = '';
+                    if(!data.value || data.value.length === 0) return tbody.innerHTML = '<tr><td colspan="5">No users found.</td></tr>';
+                    data.value.forEach(u => {
+                        // BUILD ROW ACTIONS DYNAMICALLY BASED ON FEATURE FLAGS
+                        let actions = '';
+                        if(appConfig.ENABLE_PASSWORD_RESET) actions += `<i class="material-icons green-text action-btn" title="Reset Password" onclick="prepareAction('POST', '/api/users/${u.id}/reset-password', 'Reset Password: ${u.displayName}')">vpn_key</i>`;
+                        if(appConfig.ENABLE_MFA_MANAGEMENT) actions += `<i class="material-icons orange-text action-btn" title="Manage MFA" onclick="openMfaManager('${u.id}')">security</i>`;
+                        actions += `<i class="material-icons blue-text action-btn" title="Sign-In Diagnostics" onclick="openDiagnostics('${u.id}')">timeline</i>`;
+                        actions += `<i class="material-icons deep-orange-text action-btn" title="Revoke Sessions" onclick="prepareAction('POST', '/api/users/${u.id}/revoke-sessions', 'Revoke All Sessions: ${u.displayName}')">block</i>`;
+                        if(appConfig.ENABLE_USER_DELETION) actions += `<i class="material-icons red-text action-btn" title="Delete User" onclick="prepareAction('DELETE', '/api/users/${u.id}', 'Delete User: ${u.displayName}')">delete</i>`;
+
+                        tbody.innerHTML += `<tr>
+                        <td><strong>${u.displayName}</strong></td>
+                        <td>${u.userPrincipalName} <i class="material-icons copy-icon" onclick="copyToClipboard('${u.userPrincipalName}')">content_copy</i></td>
+                        <td style="font-size:0.8em;color:gray;">${u.id} <i class="material-icons copy-icon" onclick="copyToClipboard('${u.id}')">content_copy</i></td>
+                        <td>${u.accountEnabled ? '<span class="badge green white-text">Active</span>' : '<span class="badge red white-text">Disabled</span>'}</td>
+                        <td>${actions}</td></tr>`;
+                    });
+                });
+            } else if (viewType === 'groups') {
+                search.style.display = 'flex'; fab.style.display = 'block'; document.getElementById('view-title').innerText = 'Group Management';
+                thead.innerHTML = '<tr><th>Group Name</th><th>Object ID</th><th>Type</th><th>Actions</th></tr>';
+                safeFetch(url, 'dynamic-tbody', data => {
+                    tbody.innerHTML = '';
+                    if(!data.value || data.value.length === 0) return tbody.innerHTML = '<tr><td colspan="4">No groups found.</td></tr>';
+                    data.value.forEach(g => tbody.innerHTML += `<tr>
+                        <td><strong>${g.displayName}</strong></td>
+                        <td style="font-size:0.8em;color:gray;">${g.id} <i class="material-icons copy-icon" onclick="copyToClipboard('${g.id}')">content_copy</i></td>
+                        <td>${g.securityEnabled ? 'Security' : 'M365'}</td>
+                        <td>
+                            <i class="material-icons blue-text action-btn" title="Manage Members" onclick="openGroupManager('${g.id}', '${g.displayName.replace(/'/g, "\\'")}')">people</i>
+                            <i class="material-icons red-text action-btn" title="Delete Group" onclick="prepareAction('DELETE', '/api/groups/${g.id}', 'Delete Group: ${g.displayName.replace(/'/g, "\\'")}')">delete</i>
+                        </td></tr>`);
+                });
+            } else if (viewType === 'apps') {
+                search.style.display = 'flex'; fab.style.display = 'none'; document.getElementById('view-title').innerText = 'Enterprise Applications (SPNs)';
+                thead.innerHTML = '<tr><th>App Name</th><th>App ID</th><th>Object ID</th><th>Actions</th></tr>';
+                safeFetch(url, 'dynamic-tbody', data => {
+                    tbody.innerHTML = '';
+                    if(!data.value || data.value.length === 0) return tbody.innerHTML = '<tr><td colspan="4">No apps found.</td></tr>';
+                    data.value.forEach(a => tbody.innerHTML += `<tr>
+                        <td><strong>${a.displayName}</strong></td>
+                        <td>${a.appId} <i class="material-icons copy-icon" onclick="copyToClipboard('${a.appId}')">content_copy</i></td>
+                        <td style="font-size:0.8em;color:gray;">${a.id} <i class="material-icons copy-icon" onclick="copyToClipboard('${a.id}')">content_copy</i></td>
+                        <td>
+                            <i class="material-icons green-text action-btn" title="View Permissions" onclick="viewLazyPerms('${a.id}')">policy</i>
+                            <i class="material-icons blue-text action-btn" title="Rotate Secret" onclick="prepareAction('POST', '/api/applications/${a.id}/rotate-secret', 'Rotate Secret: ${a.displayName}')">vpn_key</i>
+                        </td></tr>`);
+                });
+            } else if (viewType === 'recycle') {
+                search.style.display = 'none'; fab.style.display = 'none'; document.getElementById('view-title').innerText = 'Recycle Bin';
+                thead.innerHTML = '<tr><th>Deleted App Name</th><th>App ID</th><th>Actions</th></tr>';
+                safeFetch(url, 'dynamic-tbody', data => {
+                    tbody.innerHTML = '';
+                    if(!data.value || data.value.length === 0) return tbody.innerHTML = '<tr><td colspan="3">Recycle bin is empty.</td></tr>';
+                    data.value.forEach(a => tbody.innerHTML += `<tr><td><strong>${a.displayName}</strong></td><td>${a.appId}</td>
+                    <td><button class="btn-small orange" onclick="prepareAction('POST', '/api/recyclebin/apps/${a.id}/restore', 'Restore App: ${a.displayName}')">Restore App</button></td></tr>`);
+                });
+            } else if (viewType === 'audit') {
+                search.style.display = 'none'; fab.style.display = 'none'; document.getElementById('view-title').innerText = 'System Audit Logs';
+                thead.innerHTML = '<tr><th>Timestamp</th><th>Admin</th><th>Ticket</th><th>Action</th><th>Target</th><th>Status</th></tr>';
+                safeFetch(url, 'dynamic-tbody', data => {
+                    tbody.innerHTML = '';
+                    data.forEach(log => tbody.innerHTML += `<tr><td>${log.timestamp}</td><td>${log.admin_user}</td><td><span class="badge blue white-text">${log.ticket}</span></td><td><strong>${log.action}</strong></td><td>${log.target}</td><td>${log.status === 'SUCCESS' ? '<span class="green-text">SUCCESS</span>' : '<span class="red-text">FAILED</span>'}</td></tr>`);
+                });
+            }
+        }
+
+        function triggerSearch() {
+            const q = document.getElementById('searchInput').value;
+            if(!q) return loadView(currentView);
+            let target = currentView === 'apps' ? 'applications' : currentView;
+            loadView(currentView, `/api/search?q=${encodeURIComponent(q)}&target=${target}`);
+        }
+        
+        function viewLazyPerms(appId) {
+            document.getElementById('permData').textContent = "Loading permissions from Entra ID...";
+            M.Modal.getInstance(document.getElementById('permModal')).open();
+            fetch(`/api/applications/${appId}/permissions`).then(r=>r.json()).then(data => { document.getElementById('permData').textContent = JSON.stringify(data, null, 2); });
+        }
+
+        function executeUniversalRestore() {
+            const objId = document.getElementById('universalRestoreId').value; const ticket = document.getElementById('universalRestoreTicket').value;
+            if(!objId || !ticket) return M.toast({html: 'Object ID and Ticket are required!', classes: 'red'});
+            fetch('/api/recyclebin/restore', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Ticket-Number': ticket }, body: JSON.stringify({objectId: objId}) })
+            .then(res => {
+                if(res.ok) { M.toast({html: 'Object Restored!', classes: 'green'}); document.getElementById('universalRestoreId').value = ''; loadView('recycle', null, true); }
+                else { res.json().then(e => M.toast({html: 'Error restoring object.', classes: 'red'})); }
+            });
+        }
+
+        function openSettings() { M.Modal.getInstance(document.getElementById('settingsModal')).open(); }
+        function submitLogo() {
+            const fileInput = document.getElementById('logoUpload');
+            if(!fileInput.files[0]) return M.toast({html: 'Please select an image.', classes: 'red'});
+            const formData = new FormData(); formData.append('logo', fileInput.files[0]);
+            fetch('/api/logo', { method: 'POST', body: formData }).then(res => res.json()).then(data => {
+                if(data.success) { M.toast({html: 'Logo updated! Refreshing...', classes: 'green'}); setTimeout(() => location.reload(), 1000); }
+            });
+        }
+
+        function openCreateModal() {
+            const area = document.getElementById('dynamicFormArea');
+            if(currentView === 'users') {
+                prepareAction('POST', '/api/users', 'Create New User');
+                let domainOptions = tenantDomains.map(d => `<option value="${d}">${d}</option>`).join('');
+                area.innerHTML = `<div class="input-field"><input id="u_name" type="text" placeholder="e.g., Jane Doe"><label for="u_name" class="active">Display Name</label></div><div class="input-field"><input id="u_nick" type="text" placeholder="e.g., janed"><label for="u_nick" class="active">Mail Nickname</label></div><div style="display:flex; align-items:center;"><input id="u_prefix" type="text" placeholder="username" style="flex:1;"><span style="padding:0 10px;">@</span><select id="u_domain" style="flex:1;">${domainOptions}</select></div>`;
+            } else if (currentView === 'groups') {
+                prepareAction('POST', '/api/groups', 'Create New Group');
+                area.innerHTML = `<div class="input-field"><input id="g_name" type="text" placeholder="e.g., Marketing Team"><label for="g_name" class="active">Group Name</label></div><div class="input-field"><input id="g_desc" type="text" placeholder="e.g., Global marketing staff"><label for="g_desc" class="active">Description</label></div><label><input type="checkbox" id="g_m365" /><span>Is Microsoft 365 Group?</span></label>`;
+            }
+            M.updateTextFields();
+        }
+
+        function openGroupManager(groupId, groupName) {
+            currentGroupId = groupId; document.getElementById('groupMemberTitle').innerText = `Manage Members: ${groupName}`;
+            document.getElementById('groupMemberList').innerHTML = '<tr><td colspan="3">Loading...</td></tr>';
+            M.Modal.getInstance(document.getElementById('groupMemberModal')).open();
+            fetchGroupMembers();
+        }
+
+        function fetchGroupMembers() {
+            fetch(`/api/groups/${currentGroupId}/members`).then(r=>r.json()).then(data => {
+                const list = document.getElementById('groupMemberList'); list.innerHTML = '';
+                if(!data.value || data.value.length === 0) return list.innerHTML = '<tr><td colspan="3">No members in this group.</td></tr>';
+                data.value.forEach(m => list.innerHTML += `<tr><td><strong>${m.displayName}</strong><br><small class="grey-text">${m.userPrincipalName}</small></td>
+                <td><button class="btn-small red" onclick="executeRemoveMember('${m.id}')">Remove</button></td></tr>`);
+            });
+        }
+
+        function executeAddMember() {
+            const ticket = document.getElementById('groupTicket').value; const userId = document.getElementById('newMemberObjId').value;
+            if(!ticket || !userId) return M.toast({html: 'Ticket Number and User ID are required!', classes: 'red'});
+            fetch(`/api/groups/${currentGroupId}/members`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Ticket-Number': ticket }, body: JSON.stringify({userId: userId}) })
+            .then(res => { if(res.ok) { M.toast({html: 'Member Added!', classes: 'green'}); document.getElementById('newMemberObjId').value = ''; fetchGroupMembers(); } });
+        }
+
+        function executeRemoveMember(userId) {
+            const ticket = document.getElementById('groupTicket').value;
+            if(!ticket) return M.toast({html: 'Ticket Number is required to remove members!', classes: 'red'});
+            fetch(`/api/groups/${currentGroupId}/members/${userId}`, { method: 'DELETE', headers: { 'X-Ticket-Number': ticket } })
+            .then(res => { if(res.ok) { M.toast({html: 'Member Removed!', classes: 'orange'}); fetchGroupMembers(); } });
+        }
+
+        function prepareAction(method, url, title) {
+            pendingAction = { method, url }; document.getElementById('actionTitle').innerText = title;
+            document.getElementById('dynamicFormArea').innerHTML = ''; document.getElementById('ticketNumber').value = '';
+            M.Modal.getInstance(document.getElementById('actionModal')).open();
+        }
+
+        document.getElementById('confirmActionBtn').addEventListener('click', function() {
+            const ticket = document.getElementById('ticketNumber').value;
+            if(!ticket) return M.toast({html: 'Ticket Number is required!', classes: 'red'});
+
+            let payload = null;
+            if (pendingAction.method === 'POST') {
+                if(pendingAction.url === '/api/users') payload = { displayName: document.getElementById('u_name').value, mailNickname: document.getElementById('u_nick').value, upn: `${document.getElementById('u_prefix').value}@${document.getElementById('u_domain').value}` };
+                else if (pendingAction.url === '/api/groups') payload = { displayName: document.getElementById('g_name').value, description: document.getElementById('g_desc').value, isM365: document.getElementById('g_m365').checked };
+            }
+
+            this.innerHTML = 'Processing...'; this.disabled = true;
+
+            fetch(pendingAction.url, { method: pendingAction.method, headers: { 'Content-Type': 'application/json', 'X-Ticket-Number': ticket }, body: payload ? JSON.stringify(payload) : null })
+            .then(res => res.json().then(data => ({status: res.status, body: data}))).then(res => {
+                if(res.status === 201 || res.status === 200 || res.status === 204 || res.body.success) {
+                    M.Modal.getInstance(document.getElementById('actionModal')).close();
+                    if((pendingAction.url === '/api/users' || pendingAction.url.includes('rotate-secret') || pendingAction.url.includes('reset-password')) && pendingAction.method === 'POST') {
+                        let isUser = pendingAction.url === '/api/users' || pendingAction.url.includes('reset-password');
+                        lastGeneratedSecret = { id: isUser ? (payload ? payload.upn : 'User') : 'App Secret', pass: isUser ? res.body.password : res.body.secretText };
+                        document.getElementById('createdIdentifier').innerText = lastGeneratedSecret.id;
+                        document.getElementById('createdSecret').innerText = lastGeneratedSecret.pass;
+                        M.Modal.getInstance(document.getElementById('passwordModal')).open();
+                    } else { M.toast({html: `Action successful!`, classes: 'green'}); }
+                    loadView(currentView, null, true);
+                } else { M.toast({html: 'Error: ' + JSON.stringify(res.body), classes: 'red'}); }
+            }).finally(() => { this.innerHTML = 'Execute'; this.disabled = false; });
+        });
+
+        let currentMfaUser = '';
+        function openMfaManager(userId) {
+            currentMfaUser = userId; document.getElementById('mfaList').innerHTML = '<tr><td>Loading...</td></tr>';
+            M.Modal.getInstance(document.getElementById('mfaModal')).open();
+            safeFetch(`/api/users/${userId}/mfa`, null, data => {
+                const list = document.getElementById('mfaList'); list.innerHTML = '';
+                if(!data.value || data.value.length === 0) return list.innerHTML = '<tr><td>No MFA methods registered.</td></tr>';
+                data.value.forEach(m => {
+                    let type = m['@odata.type'] ? m['@odata.type'].replace('#microsoft.graph.', '') : 'Unknown Method';
+                    let details = m.phoneNumber || m.emailAddress || m.displayName || m.phoneAppVersion || '';
+                    list.innerHTML += `<tr><td><strong>${type}</strong><br><small class="grey-text">${details}</small></td><td><button class="btn-small red" onclick="deleteMfa('${m.id}')">Delete</button></td></tr>`;
+                });
+            });
+        }
+
+        function deleteMfa(methodId) {
+            const ticket = document.getElementById('mfaTicket').value;
+            if(!ticket) return M.toast({html: 'Ticket Number is required!', classes: 'red'});
+            fetch(`/api/users/${currentMfaUser}/mfa/${methodId}`, { method: 'DELETE', headers: { 'X-Ticket-Number': ticket } }).then(res => {
+                if(res.ok) { M.toast({html: 'MFA Deleted', classes: 'green'}); M.Modal.getInstance(document.getElementById('mfaModal')).close(); }
+                else { res.json().then(e => M.toast({html: 'Error: ' + JSON.stringify(e), classes: 'red'})); }
+            });
+        }
+
+        function openDiagnostics(userId) {
+            const list = document.getElementById('diagList'); list.innerHTML = '<tr><td colspan="5">Fetching logs...</td></tr>';
+            M.Modal.getInstance(document.getElementById('diagModal')).open();
+            safeFetch(`/api/users/${userId}/diagnostics`, null, data => {
+                list.innerHTML = '';
+                if(!data.value || data.value.length === 0) return list.innerHTML = '<tr><td colspan="5">No recent sign-ins found.</td></tr>';
+                data.value.forEach(log => {
+                    let statusHtml = log.status.errorCode === 0 ? '<span class="green-text">Success</span>' : '<span class="red-text">Failed</span>';
+                    let loc = log.location ? `${log.location.city}, ${log.location.state}` : 'Unknown';
+                    list.innerHTML += `<tr><td>${new Date(log.createdDateTime).toLocaleString()}</td><td>${log.appDisplayName}</td><td>${log.ipAddress}<br><small>${loc}</small></td><td>${statusHtml}</td><td><small>${log.status.failureReason || '-'}</small></td></tr>`;
+                });
+            });
+        }
+
+        function exportCsv() {
+            const a = document.createElement('a'); a.setAttribute('href', window.URL.createObjectURL(new Blob([`Identifier,Secret\n${lastGeneratedSecret.id},${lastGeneratedSecret.pass}`], { type: 'text/csv' })));
+            a.setAttribute('download', 'credentials.csv'); document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        }
+    </script>
+</body>
+</html>

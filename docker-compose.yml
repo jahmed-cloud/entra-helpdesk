@@ -1,0 +1,31 @@
+version: '3.8'
+services:
+  entra-helpdesk:
+    build: .
+    container_name: entra_helpdesk
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # CORE AUTHENTICATION
+      - TENANT_ID=6b39adb4-152c-4a64-a7c3-7463f439734b
+      - CLIENT_ID=bf20d54d-45f4-4b79-92ad-9f9ca435e72a
+      - CLIENT_SECRET=wkd8Q~TlEa8JeB8JHNmP2TqV~fVvf08wPj74daoT
+      - ALLOWED_ADMINS=admin@yourdomain.com
+      # ADD THIS LINE:
+      - BASE_URL=https://ehp.jahmed.cloud
+      - ALLOWED_ADMINS=admin@demojahmed.onmicrosoft.com,jahmed@demojahmed.onmicrosoft.com
+      # CUSTOMIZATION & FEATURE FLAGS (Optional)
+      - APP_NAME=Contoso IT Helpdesk
+      - ENABLE_PASSWORD_RESET=true
+      - ENABLE_MFA_MANAGEMENT=true
+      - ENABLE_USER_DELETION=false # Example: Hide the delete button for users
+      - ENABLE_GROUP_MANAGEMENT=true
+      - ENABLE_APP_MANAGEMENT=true
+    volumes:
+      - entra_helpdesk_data:/app/static/uploads
+      - helpdesk_db:/app  # Persists the SQLite Audit Database
+volumes:
+  entra_helpdesk_data:
+  helpdesk_db:
+

@@ -45,7 +45,79 @@ The Entra Helpdesk Portal is designed to solve a critical enterprise security ch
 * **Feature Flags:** Completely customize the portal via `docker-compose.yml`. Disable User Deletion, Password Resets, or entire modules (like Apps or Groups) to fit your organization's exact delegation model.
 
 ---
+```mermaid
+flowchart LR
+    %% =========================
+    %% External Zone
+    %% =========================
+    subgraph U[🌍 External / Untrusted Zone]
+        direction TB
+        A[👤 Vendors / Contractors]
+    end
 
+    %% =========================
+    %% Secure Access Layer
+    %% =========================
+    subgraph Z[🛡️ Secure Access Layer DMZ / Reverse Proxy]
+        direction TB
+        W[🌐 Web Gateway / Reverse Proxy<br/>WAF / SSL Termination]
+    end
+
+    %% =========================
+    %% Internal Trusted Zone
+    %% =========================
+    subgraph S[🏢 Internal Trusted Environment]
+        direction TB
+        B[🐳 Entra Helpdesk Portal<br/>Docker Container]
+        N[📋 Security Controls<br/>• No Entra Portal Access<br/>• Scoped UI RBAC<br/>• Mandatory ITSM Ticket<br/>• Full Audit Logging]
+    end
+
+    %% =========================
+    %% Cloud Identity Layer
+    %% =========================
+    subgraph C[☁️ Microsoft Identity Cloud]
+        direction TB
+        D[🟦 Microsoft Entra ID<br/>Tenant]
+        G[🔗 Microsoft Graph API]
+    end
+
+    %% =========================
+    %% Flow
+    %% =========================
+    A -->|HTTPS 443| W
+    W -->|Forward Request| B
+    B -->|Validated Action + Ticket ID| G
+    G -->|Scoped Permissions Service Principal| D
+
+    B -.-> N
+
+    %% =========================
+    %% Styles
+    %% =========================
+    classDef user fill:#E1F5FE,stroke:#0277BD,stroke-width:2px,color:#01579B;
+    classDef dmz fill:#FFF3E0,stroke:#EF6C00,stroke-width:2px,color:#E65100;
+    classDef internal fill:#E8EAF6,stroke:#3949AB,stroke-width:2px,color:#1A237E;
+    classDef cloud fill:#E3F2FD,stroke:#0D47A1,stroke-width:2px,color:#0D47A1;
+    classDef note fill:#FBE9E7,stroke:#D84315,stroke-width:1.5px,stroke-dasharray: 5 5;
+
+    class A user;
+    class W dmz;
+    class B internal;
+    class N note;
+    class D,G cloud;
+
+    %% Boundaries
+    style U fill:#FAFAFA,stroke:#90A4AE,stroke-dasharray: 5 5;
+    style Z fill:#FFF8E1,stroke:#FFB74D,stroke-dasharray: 5 5;
+    style S fill:#F3F4FF,stroke:#9FA8DA,stroke-dasharray: 5 5;
+    style C fill:#F1F8FF,stroke:#64B5F6,stroke-dasharray: 5 5;
+
+    %% Links
+    linkStyle 0 stroke:#0277BD,stroke-width:2px;
+    linkStyle 1 stroke:#EF6C00,stroke-width:2px;
+    linkStyle 2 stroke:#3949AB,stroke-width:2px;
+    linkStyle 3 stroke:#0D47A1,stroke-width:2px;
+```
 ## 📋 Prerequisites: Microsoft Graph API Scopes
 
 To run this container, you must create an App Registration in your Entra ID tenant and grant it the following **Application Permissions** (Admin Consent Required):
